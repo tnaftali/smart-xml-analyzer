@@ -41,7 +41,7 @@ def open_html(html_path):
 def find_element_by_id(html_page, id):
     root = etree.fromstring(html_page)
     tree = root.getroottree()
-    xpath_by_id = '//*[@id="' + id + '"]'
+    xpath_by_id = '//*[@id="{}"]'.format(id)
     result = root.xpath(xpath_by_id)
     if len(result) > 0:
         element = result[0]
@@ -64,33 +64,45 @@ def get_properties(element):
 def find_element_by_properties(html_page, properties, element_type, original_element):
     root = etree.fromstring(html_page)
     properties_matches = {}
-    html_items = []
-    match_candidates = []
     for prop in properties:
-        find_element_by_property(prop, element_type, root, properties_matches, html_items)
-    for key in properties_matches:
-        for item in (properties_matches[key]):
-            match_candidates.append(item.html_code)
-    return get_closest_match(original_element, match_candidates, html_items)
+        property_matches = find_elements_by_property(prop, element_type, root, properties_matches)
+        properties_matches[prop] = property_matches
+    return get_closest_match(original_element, properties_matches)
 
 
-def find_element_by_property(prop, element_type, root, properties_matches, html_items):
+def find_elements_by_property(prop, element_type, root, properties_matches):
+    property_matches = []
     tree = root.getroottree()
-    xpath_by_attr = '//' + element_type + '[@' + prop + ']'
+    xpath_by_attr = '//{}[@{}]'.format(element_type, prop)
     elements = root.xpath(xpath_by_attr)
     for elem in elements:
-        html_items.append(HtmlItem(etree.tostring(elem), tree.getpath(elem)))
-    properties_matches[prop] = html_items
+        html_item = HtmlItem(etree.tostring(elem), tree.getpath(elem))
+        property_matches.append(html_item)
+    return property_matches
 
 
-def get_closest_match(original_element, match_candidates, html_items):
-    match = difflib.get_close_matches(original_element.html_code, match_candidates, 1)
-    if len(match) > 0:
-        html_items = list(filter(lambda x: x.html_code == match[0], html_items))
-        if len(html_items) > 0:
-            return html_items[0]
+def get_closest_match(original_element, properties_matches):
+    html_items = []
+    for key in properties_matches:
+        property_items = properties_matches[key]
+        for item in property_items:
+            if not any(element.html_code == item.html_code for element in html_items):
+                html_items.append(item)
+    
+    if len(html_items) > 0:
+        match_candidates_html = [htm_item.html_code for htm_item in html_items]
+        if (len(match_candidates_html) > 1):
+            match = difflib.get_close_matches(original_element.html_code, match_candidates_html, 1)
+            if len(match) > 0:
+                found_html_items = list(filter(lambda x: x.html_code == match[0], html_items))
+                if len(found_html_items) > 0:
+                    return found_html_items[0]
+                else:
+                    return None
+            else:
+                return None
         else:
-            return None
+            return html_items[0]
     else:
         return None
 
